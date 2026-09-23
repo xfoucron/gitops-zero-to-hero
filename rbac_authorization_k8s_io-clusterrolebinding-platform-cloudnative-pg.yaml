@@ -1,0 +1,19 @@
+# Source: platform/charts/cloudnative-pg/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: platform-cloudnative-pg
+  labels:
+    helm.sh/chart: cloudnative-pg-0.29.0
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/instance: platform
+    app.kubernetes.io/version: "1.30.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: platform-cloudnative-pg
+subjects:
+- kind: ServiceAccount
+  name: platform-cloudnative-pg
+  namespace: gitops-zero-to-hero
