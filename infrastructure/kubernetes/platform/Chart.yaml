@@ -1,0 +1,14 @@
+---
+apiVersion: v2
+version: 1.0.0
+
+name: platform
+description: Platform dependencies (Valkey, CNPG)
+
+dependencies:
+  - name: valkey-operator
+    version: 0.6.0
+    repository: https://valkey.io/valkey-helm/
+  - name: cloudnative-pg
+    version: 0.29.0
+    repository: https://cloudnative-pg.github.io/charts
