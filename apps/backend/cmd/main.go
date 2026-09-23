@@ -4,6 +4,7 @@ import (
 	"backend/internal/api"
 	"backend/internal/config"
 	"backend/internal/store"
+	"backend/internal/telemetry"
 	"context"
 	"log"
 	"net/http"
@@ -16,6 +17,18 @@ import (
 func main() {
 	log.Printf("starting")
 
+	otelShutdown, err := telemetry.Setup(context.Background(), "url-shortener")
+	if err != nil {
+		log.Fatalf("otel setup failed: %v", err)
+	}
+	defer func() {
+		if err := otelShutdown(context.Background()); err != nil {
+			log.Printf("otel shutdown error: %v", err)
+		}
+	}()
+
+	logger := telemetry.Logger()
+
 	cfg := config.Load()
 
 	pgStore, err := store.NewPostgresStore(cfg.PostgresURL)
@@ -25,16 +38,16 @@ func main() {
 	}
 	defer pgStore.Close()
 
+	if err := store.RunMigrationsWithDB(pgStore.DB(), "migrations"); err != nil {
+		log.Fatalf("migrations failed: %v", err)
+	}
+
 	redisStore, err := store.NewRedisStore(cfg.RedisURL)
 
 	if err != nil {
 		log.Fatalf("redis connection failed: %v", err)
 	}
 	defer redisStore.Close()
-
-	if err := store.RunMigrations(cfg.PostgresURL, "migrations"); err != nil {
-		log.Fatalf("migrations failed: %v", err)
-	}
 
 	router := api.NewRouter(cfg, pgStore, redisStore)
 
@@ -46,7 +59,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("backend listing on :%s", cfg.ApplicationPort)
+		logger.Info("backend listening", "port", cfg.ApplicationPort)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
@@ -57,7 +70,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	log.Println("shutting down")
+	logger.Info("shutting down")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 	defer cancel()
@@ -66,5 +79,5 @@ func main() {
 		log.Fatalf("graceful shutdown failed: %v", err)
 	}
 
-	log.Printf("goodbye")
+	logger.Info("goodbye")
 }

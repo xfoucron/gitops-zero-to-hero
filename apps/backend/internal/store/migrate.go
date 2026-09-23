@@ -11,13 +11,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-func RunMigrations(dsn, migrationsPath string) error {
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return fmt.Errorf("open db for migrations: %w", err)
-	}
-	defer db.Close()
-
+func RunMigrationsWithDB(db *sql.DB, migrationsPath string) error {
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
 	if err != nil {
 		return fmt.Errorf("create migrate driver: %w", err)

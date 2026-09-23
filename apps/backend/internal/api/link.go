@@ -3,6 +3,7 @@ package api
 import (
 	"backend/internal/models"
 	"backend/internal/store"
+	"backend/internal/telemetry"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 )
+
+var tracer = telemetry.Tracer("api")
 
 const (
 	maxGenerateTries = 5
@@ -59,7 +62,9 @@ func (h *Handler) CreateLink(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	link, err := h.pg.CreateLink(ctx, slug, req.TargetURL)
+	createCtx, createSpan := tracer.Start(ctx, "pg.CreateLink")
+	link, err := h.pg.CreateLink(createCtx, slug, req.TargetURL)
+	createSpan.End()
 
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "could not create link")
@@ -80,13 +85,17 @@ func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	ctx := r.Context()
 
-	target, err := h.rs.GetCachedTarget(ctx, slug)
+	cacheCtx, cacheSpan := tracer.Start(ctx, "redis.GetCachedTarget")
+	target, err := h.rs.GetCachedTarget(cacheCtx, slug)
+	cacheSpan.End()
 	if err != nil {
 		target = ""
 	}
 
 	if target == "" {
-		link, err := h.pg.GetLinkBySlug(ctx, slug)
+		pgCtx, pgSpan := tracer.Start(ctx, "pg.GetLinkBySlug")
+		link, err := h.pg.GetLinkBySlug(pgCtx, slug)
+		pgSpan.End()
 
 		if errors.Is(err, store.ErrNotFound) {
 			respondError(w, http.StatusNotFound, "link not found")
@@ -109,7 +118,9 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	ctx := r.Context()
 
-	link, err := h.pg.GetLinkBySlug(ctx, slug)
+	pgCtx, pgSpan := tracer.Start(ctx, "pg.GetLinkBySlug")
+	link, err := h.pg.GetLinkBySlug(pgCtx, slug)
+	pgSpan.End()
 
 	if errors.Is(err, store.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "link not found")
@@ -121,7 +132,9 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clicks, err := h.pg.CountClicks(ctx, slug)
+	countCtx, countSpan := tracer.Start(ctx, "pg.CountClicks")
+	clicks, err := h.pg.CountClicks(countCtx, slug)
+	countSpan.End()
 
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "could not count clicks")
