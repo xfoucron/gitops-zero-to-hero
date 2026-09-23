@@ -1,0 +1,23 @@
+# Source: platform/charts/valkey-operator/templates/metrics-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-valkey-operator-metrics
+  namespace: gitops-zero-to-hero
+  labels:
+    helm.sh/chart: valkey-operator-0.6.0
+    app.kubernetes.io/name: valkey-operator
+    app.kubernetes.io/instance: platform
+    app.kubernetes.io/version: "v0.6.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8443
+    protocol: TCP
+    targetPort: metrics
+  selector:
+    app.kubernetes.io/name: valkey-operator
+    app.kubernetes.io/instance: platform
+    control-plane: controller-manager

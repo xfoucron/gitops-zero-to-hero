@@ -1,0 +1,96 @@
+# Source: platform/charts/valkey-operator/templates/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: platform-valkey-operator-manager
+  labels:
+    helm.sh/chart: valkey-operator-0.6.0
+    app.kubernetes.io/name: valkey-operator
+    app.kubernetes.io/instance: platform
+    app.kubernetes.io/version: "v0.6.0"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - persistentvolumeclaims
+  - secrets
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - valkey.io
+  resources:
+  - valkeyclusters
+  - valkeynodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - valkey.io
+  resources:
+  - valkeyclusters/finalizers
+  - valkeynodes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - valkey.io
+  resources:
+  - valkeyclusters/status
+  - valkeynodes/status
+  verbs:
+  - get
+  - patch
+  - update

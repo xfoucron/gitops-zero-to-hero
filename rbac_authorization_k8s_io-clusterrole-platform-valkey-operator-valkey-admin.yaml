@@ -1,0 +1,37 @@
+# Source: platform/charts/valkey-operator/templates/valkey-admin-role.yaml
+# Aggregated ClusterRole granting full management of the Valkey CRDs.
+# Rolls up into the built-in "admin" ClusterRole so namespace admins can
+# manage valkeyclusters/valkeynodes without the operator's controller permissions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: platform-valkey-operator-valkey-admin
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    helm.sh/chart: valkey-operator-0.6.0
+    app.kubernetes.io/name: valkey-operator
+    app.kubernetes.io/instance: platform
+    app.kubernetes.io/version: "v0.6.0"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - valkey.io
+  resources:
+  - valkeyclusters
+  - valkeynodes
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - valkey.io
+  resources:
+  - valkeyclusters/status
+  - valkeynodes/status
+  verbs:
+  - get
