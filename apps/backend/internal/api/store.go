@@ -11,9 +11,11 @@ type LinkStore interface {
 	GetLinkBySlug(ctx context.Context, slug string) (*models.Link, error)
 	CountClicks(ctx context.Context, slug string) (int64, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
+	Ping(ctx context.Context) error
 }
 
 type CacheStore interface {
 	CacheTarget(ctx context.Context, slug, targetURL string) error
 	GetCachedTarget(ctx context.Context, slug string) (string, error)
+	Ping(ctx context.Context) error
 }

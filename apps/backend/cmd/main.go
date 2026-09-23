@@ -42,7 +42,7 @@ func main() {
 		log.Fatalf("migrations failed: %v", err)
 	}
 
-	redisStore, err := store.NewRedisStore(cfg.RedisURL)
+	redisStore, err := store.NewRedisStore(cfg.RedisURL, cfg.CacheTTL)
 
 	if err != nil {
 		log.Fatalf("redis connection failed: %v", err)

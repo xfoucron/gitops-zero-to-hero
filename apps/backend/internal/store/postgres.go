@@ -7,10 +7,16 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-var ErrNotFound = errors.New("link not found")
+const uniqueViolationCode = "23505"
+
+var (
+	ErrNotFound  = errors.New("link not found")
+	ErrSlugTaken = errors.New("slug already taken")
+)
 
 type PostgresStore struct {
 	db *sql.DB
@@ -45,6 +51,10 @@ func (s *PostgresStore) DB() *sql.DB {
 	return s.db
 }
 
+func (s *PostgresStore) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
+}
+
 func (s *PostgresStore) CreateLink(ctx context.Context, slug, targetURL string) (*models.Link, error) {
 	var link models.Link
 
@@ -57,6 +67,10 @@ func (s *PostgresStore) CreateLink(ctx context.Context, slug, targetURL string) 
 		Scan(&link.ID, &link.Slug, &link.TargetURL, &link.CreatedAt)
 
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolationCode {
+			return nil, ErrSlugTaken
+		}
 		return nil, err
 	}
 

@@ -10,6 +10,8 @@ import (
 	"errors"
 	"math/big"
 	"net/http"
+	"net/url"
+	"regexp"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -21,9 +23,17 @@ const (
 
 	shortSlugLength   = 7
 	shortSlugAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	maxSlugLength = 32
+
+	maxCreateLinkBodyBytes = 1 << 20
 )
 
+var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
 func (h *Handler) CreateLink(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxCreateLinkBodyBytes)
+
 	var req models.CreateLinkRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -31,40 +41,40 @@ func (h *Handler) CreateLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.TargetURL == "" {
-		respondError(w, http.StatusBadRequest, "target_url is required")
+	if err := validateTargetURL(req.TargetURL); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	ctx := r.Context()
-	slug := req.Slug
 
-	if slug == "" {
-		generated, err := h.generateUniqueSlug(ctx)
+	var link *models.Link
+	var err error
 
-		if err != nil {
-			respondError(w, http.StatusInternalServerError, "could not generate slug")
+	if req.Slug != "" {
+		if err := validateSlug(req.Slug); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		slug = generated
-	} else {
-		exists, err := h.pg.SlugExists(ctx, slug)
-
-		if err != nil {
+		exists, existsErr := h.pg.SlugExists(ctx, req.Slug)
+		if existsErr != nil {
 			respondError(w, http.StatusInternalServerError, "could not validate slug")
 			return
 		}
-
 		if exists {
 			respondError(w, http.StatusConflict, "slug already taken")
 			return
 		}
-	}
 
-	createCtx, createSpan := tracer.Start(ctx, "pg.CreateLink")
-	link, err := h.pg.CreateLink(createCtx, slug, req.TargetURL)
-	createSpan.End()
+		link, err = h.createLink(ctx, req.Slug, req.TargetURL)
+		if errors.Is(err, store.ErrSlugTaken) {
+			respondError(w, http.StatusConflict, "slug already taken")
+			return
+		}
+	} else {
+		link, err = h.createLinkWithGeneratedSlug(ctx, req.TargetURL)
+	}
 
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "could not create link")
@@ -149,26 +159,33 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) generateUniqueSlug(ctx context.Context) (string, error) {
+func (h *Handler) createLink(ctx context.Context, slug, targetURL string) (*models.Link, error) {
+	spanCtx, span := tracer.Start(ctx, "pg.CreateLink")
+	defer span.End()
+
+	return h.pg.CreateLink(spanCtx, slug, targetURL)
+}
+
+func (h *Handler) createLinkWithGeneratedSlug(ctx context.Context, targetURL string) (*models.Link, error) {
 	for i := 0; i < maxGenerateTries; i++ {
 		slug, err := randomSlug(shortSlugLength)
-
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		exists, err := h.pg.SlugExists(ctx, slug)
-
-		if err != nil {
-			return "", err
+		link, err := h.createLink(ctx, slug, targetURL)
+		if err == nil {
+			return link, nil
 		}
 
-		if !exists {
-			return slug, nil
+		if errors.Is(err, store.ErrSlugTaken) {
+			continue
 		}
+
+		return nil, err
 	}
 
-	return "", errors.New("could not generate a unique slug after several tries")
+	return nil, errors.New("could not generate a unique slug after several tries")
 }
 
 func randomSlug(length int) (string, error) {
@@ -185,4 +202,37 @@ func randomSlug(length int) (string, error) {
 	}
 
 	return string(b), nil
+}
+
+func validateTargetURL(raw string) error {
+	if raw == "" {
+		return errors.New("target_url is required")
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return errors.New("target_url is not a valid URL")
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errors.New("target_url must use http or https")
+	}
+
+	if u.Host == "" {
+		return errors.New("target_url must include a host")
+	}
+
+	return nil
+}
+
+func validateSlug(slug string) error {
+	if len(slug) > maxSlugLength {
+		return errors.New("slug must be at most 32 characters")
+	}
+
+	if !slugPattern.MatchString(slug) {
+		return errors.New("slug may only contain letters, digits, hyphens and underscores")
+	}
+
+	return nil
 }

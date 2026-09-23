@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -20,20 +22,28 @@ func NewRouter(cfg *config.Config, pg *store.PostgresStore, rd *store.RedisStore
 	r.Use(skipLoggingFor("/healthz", middleware.Logger))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(10 * time.Second))
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins: cfg.CORSAllowedOrigins,
+		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+		AllowedHeaders: []string{"Content-Type"},
+		MaxAge:         300,
+	}))
 
 	r.Get("/healthz", h.Health)
+
 	r.Route("/api/links", func(r chi.Router) {
-		r.Post("/", h.CreateLink)
-		r.Get("/{slug}/stats", h.GetStats)
+		r.With(httprate.LimitByIP(cfg.CreateLinkRateLimit, cfg.CreateLinkRateLimitWindow)).
+			Method(http.MethodPost, "/", traced("CreateLink", h.CreateLink))
+		r.Method(http.MethodGet, "/{slug}/stats", traced("GetStats", h.GetStats))
 	})
 
-	r.Get("/{slug}", h.Redirect)
+	r.Method(http.MethodGet, "/{slug}", traced("Redirect", h.Redirect))
 
-	return otelhttp.NewHandler(r, "http.server",
-		otelhttp.WithFilter(func(r *http.Request) bool {
-			return r.URL.Path != "/healthz"
-		}),
-	)
+	return r
+}
+
+func traced(operation string, handler http.HandlerFunc) http.Handler {
+	return otelhttp.NewHandler(handler, operation)
 }
 
 func skipLoggingFor(path string, logging func(http.Handler) http.Handler) func(http.Handler) http.Handler {

@@ -57,6 +57,54 @@ func TestCreateLink_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestCreateLink_InvalidTargetURL(t *testing.T) {
+	h := newTestHandler(&mockLinkStore{}, &mockCacheStore{})
+
+	body := `{"target_url":"javascript:alert(1)"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/links", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	h.CreateLink(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d (%s)", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateLink_InvalidSlug(t *testing.T) {
+	h := newTestHandler(&mockLinkStore{}, &mockCacheStore{})
+
+	body := `{"slug":"has a space","target_url":"https://example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/links", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	h.CreateLink(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d (%s)", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateLink_CustomSlugConflictOnInsert(t *testing.T) {
+	pg := &mockLinkStore{
+		slugExistsFn: func(ctx context.Context, slug string) (bool, error) { return false, nil },
+		createLinkFn: func(ctx context.Context, slug, targetURL string) (*models.Link, error) {
+			return nil, store.ErrSlugTaken
+		},
+	}
+	h := newTestHandler(pg, &mockCacheStore{})
+
+	body := `{"slug":"raced","target_url":"https://example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/links", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	h.CreateLink(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d (%s)", w.Code, w.Body.String())
+	}
+}
+
 func TestCreateLink_CustomSlugAlreadyTaken(t *testing.T) {
 	pg := &mockLinkStore{
 		slugExistsFn: func(ctx context.Context, slug string) (bool, error) { return true, nil },
