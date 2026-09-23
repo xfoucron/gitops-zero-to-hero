@@ -11,7 +11,7 @@ import (
 )
 
 func NewRouter(cfg *config.Config, pg *store.PostgresStore, rd *store.RedisStore) http.Handler {
-	h := &Handler{cfg: cfg}
+	h := &Handler{cfg: cfg, pg: pg, rs: rd}
 
 	r := chi.NewRouter()
 

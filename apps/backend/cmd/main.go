@@ -14,6 +14,8 @@ import (
 )
 
 func main() {
+	log.Printf("starting")
+
 	cfg := config.Load()
 
 	pgStore, err := store.NewPostgresStore(cfg.PostgresURL)
@@ -29,6 +31,10 @@ func main() {
 		log.Fatalf("redis connection failed: %v", err)
 	}
 	defer redisStore.Close()
+
+	if err := store.RunMigrations(cfg.PostgresURL, "migrations"); err != nil {
+		log.Fatalf("migrations failed: %v", err)
+	}
 
 	router := api.NewRouter(cfg, pgStore, redisStore)
 

@@ -2,15 +2,14 @@ package api
 
 import (
 	"backend/internal/config"
-	"backend/internal/store"
 	"encoding/json"
 	"net/http"
 )
 
 type Handler struct {
 	cfg *config.Config
-	pg  *store.PostgresStore
-	rs  *store.RedisStore
+	pg  LinkStore
+	rs  CacheStore
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload interface{}) {

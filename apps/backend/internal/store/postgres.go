@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 var ErrNotFound = errors.New("link not found")

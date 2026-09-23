@@ -4,10 +4,10 @@ import (
 	"backend/internal/models"
 	"backend/internal/store"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"math/big"
-	"math/rand"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -81,10 +81,8 @@ func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	target, err := h.rs.GetCachedTarget(ctx, slug)
-
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "cache lookup failed")
-		return
+		target = ""
 	}
 
 	if target == "" {
@@ -103,6 +101,8 @@ func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 		target = link.TargetURL
 		_ = h.rs.CacheTarget(ctx, slug, target)
 	}
+
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +128,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusCreated, map[string]interface{}{
+	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"clicks":     clicks,
 		"slug":       link.Slug,
 		"target_url": link.TargetURL,
@@ -168,7 +168,7 @@ func randomSlug(length int) (string, error) {
 			return "", err
 		}
 
-		b[i] = shortSlugAlphabet
+		b[i] = shortSlugAlphabet[n.Int64()]
 	}
 
 	return string(b), nil
